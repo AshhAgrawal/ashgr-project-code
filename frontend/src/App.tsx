@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 
+import LandingPage from "./LandingPage";
+
 type Product = {
   sku: string;
   product_id: string;
@@ -88,7 +90,7 @@ const productImage = (product: Product) =>
   productImages[`${product.product_id}-${product.color ?? ""}`] ??
   productImages[product.product_id];
 
-export default function App() {
+function Workspace() {
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -743,5 +745,30 @@ export default function App() {
         {messages.length > 1 && <i />}
       </button>
     </main>
+  );
+}
+
+const workspaceHash = "#/workspace";
+
+export default function App() {
+  const [showWorkspace, setShowWorkspace] = useState(
+    () => window.location.hash === workspaceHash,
+  );
+
+  useEffect(() => {
+    const handleRouteChange = () =>
+      setShowWorkspace(window.location.hash === workspaceHash);
+    window.addEventListener("hashchange", handleRouteChange);
+    return () => window.removeEventListener("hashchange", handleRouteChange);
+  }, []);
+
+  function enterWorkspace() {
+    window.location.hash = "/workspace";
+  }
+
+  return showWorkspace ? (
+    <Workspace />
+  ) : (
+    <LandingPage onEnterWorkspace={enterWorkspace} />
   );
 }
