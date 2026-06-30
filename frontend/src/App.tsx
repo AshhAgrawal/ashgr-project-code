@@ -27,6 +27,8 @@ type Message = {
 
 type SortOrder = "default" | "price-low" | "price-high";
 
+const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
 const starterMessage: Message = {
   id: 0,
   role: "assistant",
@@ -69,7 +71,7 @@ export default function App() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const response = await fetch("/api/products");
+      const response = await fetch(`${API_URL}/api/products`);
       if (!response.ok) throw new Error("Could not load inventory.");
       setProducts((await response.json()) as Product[]);
       setCatalogError(null);
@@ -158,7 +160,7 @@ export default function App() {
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),

@@ -64,6 +64,12 @@ Open `http://localhost:5173` to use the **ashgr** storefront. The shopping catal
 method used by the command-line app. The API keeps one agent instance alive,
 so in-memory store changes last until the API server restarts.
 
+For a separately hosted production API, set the frontend build variable:
+
+```bash
+VITE_API_URL="https://your-api.example.com"
+```
+
 ## Notes
 
 - Assignment "today" is fixed as `2026-06-19`.

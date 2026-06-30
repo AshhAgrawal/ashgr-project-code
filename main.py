@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import os
 
+from api import app
 from retail_agent.agent import RetailAgent
 from retail_agent.store import RetailStore
+
+# Vercel discovers Python applications through a top-level `app` object.
+# The instance is imported from api.py so the CLI and REST entry points remain
+# available without duplicating any API routes.
 
 
 def main() -> None:
