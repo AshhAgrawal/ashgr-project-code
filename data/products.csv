@@ -1,0 +1,14 @@
+sku,product_id,product_name,category,color,size,retail_price
+TEE-BLU-S,P-TEE,Classic Tee,apparel,Blue,S,25.00
+TEE-BLU-M,P-TEE,Classic Tee,apparel,Blue,M,25.00
+TEE-BLU-L,P-TEE,Classic Tee,apparel,Blue,L,25.00
+TEE-BLK-S,P-TEE,Classic Tee,apparel,Black,S,25.00
+TEE-BLK-M,P-TEE,Classic Tee,apparel,Black,M,25.00
+TEE-BLK-L,P-TEE,Classic Tee,apparel,Black,L,25.00
+HOOD-GRY-M,P-HOOD,Pullover Hoodie,apparel,Gray,M,60.00
+HOOD-GRY-L,P-HOOD,Pullover Hoodie,apparel,Gray,L,60.00
+HOOD-NVY-M,P-HOOD,Pullover Hoodie,apparel,Navy,M,60.00
+HOOD-NVY-L,P-HOOD,Pullover Hoodie,apparel,Navy,L,60.00
+TOTE,P-TOTE,Canvas Tote,goods,,,18.00
+MUG,P-MUG,Ceramic Mug,goods,,,12.00
+SOCK,P-SOCK,Wool Socks,goods,,,9.00

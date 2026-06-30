@@ -1,0 +1,8 @@
+supplier_id,product_id,unit_cost,lead_time_days
+SUP-NW,P-TEE,10.00,7
+SUP-NW,P-HOOD,28.00,7
+SUP-NW,P-TOTE,7.00,7
+SUP-NW,P-MUG,5.00,7
+SUP-NW,P-SOCK,3.00,7
+SUP-PG,P-TOTE,6.50,14
+SUP-PG,P-MUG,4.50,10

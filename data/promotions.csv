@@ -1,0 +1,2 @@
+promo_id,description,type,value,scope_type,scope_ref,start_date,end_date
+PR-001,Spring Tee Sale - 20% off Classic Tee,percent_off,20,product,P-TEE,2026-05-01,2026-05-07
