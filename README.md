@@ -77,7 +77,7 @@ The repository is configured as one Vercel project: Vite is served as the
 static frontend and `api/index.py` exposes the FastAPI application as a Python
 Function. Import the repository in Vercel with the project root set to `.`;
 `vercel.json` supplies the install command, build command, output directory,
-and `/api/*` routing.
+framework preset, and `/api/*` routing.
 
 Configure these project environment variables before deploying:
 
