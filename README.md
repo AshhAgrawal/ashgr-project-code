@@ -47,7 +47,7 @@ Type `exit` or `quit` to stop.
 Start the REST API from the project root:
 
 ```bash
-uvicorn api:app --reload
+uvicorn retail_agent.api:app --reload
 ```
 
 In a second terminal, install and start the React app:
@@ -64,11 +64,39 @@ Open `http://localhost:5173` to use the **ashgr** storefront. The shopping catal
 method used by the command-line app. The API keeps one agent instance alive,
 so in-memory store changes last until the API server restarts.
 
-For a separately hosted production API, set the frontend build variable:
+The frontend uses same-origin `/api` requests by default. Only set
+`VITE_API_URL` when the API is hosted on a different domain:
 
 ```bash
 VITE_API_URL="https://your-api.example.com"
 ```
+
+### Deploy to Vercel
+
+The repository is configured as one Vercel project: Vite is served as the
+static frontend and `api/index.py` exposes the FastAPI application as a Python
+Function. Import the repository in Vercel with the project root set to `.`;
+`vercel.json` supplies the install command, build command, output directory,
+and `/api/*` routing.
+
+Configure these project environment variables before deploying:
+
+```text
+GROQ_API_KEY=your_groq_key
+LLM_PROVIDER=groq
+```
+
+Do not set `VITE_API_URL` for this single-project deployment. The storefront
+and API share one domain. After deployment, verify both URLs:
+
+```text
+https://your-project.vercel.app/
+https://your-project.vercel.app/api/health
+```
+
+The CSV-backed store remains in memory. Vercel may create or recycle Function
+instances, so runtime sales, promotions, returns, and inventory mutations are
+not persistent until a database is added.
 
 ## Notes
 

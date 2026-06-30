@@ -8,11 +8,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from retail_agent.agent import RetailAgent
-from retail_agent.store import RetailStore
+from .agent import RetailAgent
+from .store import RetailStore
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ChatRequest(BaseModel):
@@ -43,8 +43,9 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-# One long-lived agent preserves its conversation and in-memory store changes
-# for as long as the API process is running.
+# One long-lived agent preserves state while a process or serverless function
+# instance remains warm. A future database can replace this store without
+# changing the HTTP API.
 agent = RetailAgent(RetailStore(PROJECT_ROOT / "data"), provider=os.getenv("LLM_PROVIDER"))
 agent_lock = Lock()
 
