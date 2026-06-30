@@ -26,6 +26,16 @@ type Message = {
 };
 
 type SortOrder = "default" | "price-low" | "price-high";
+type ViewMode = "grid" | "list";
+type TableSortKey =
+  | "product_name"
+  | "category"
+  | "sku"
+  | "color"
+  | "size"
+  | "retail_price"
+  | "quantity";
+type SortDirection = "ascending" | "descending";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -34,6 +44,33 @@ const starterMessage: Message = {
   role: "assistant",
   text: "Hi — I can help with sales, returns, promotions, reorders, and inventory reports. What would you like to do?",
 };
+
+const recommendedPrompts = [
+  "Ring up two Classic Tees, Blue Medium, and one Canvas Tote for a walk-in paying cash, dated today.",
+  "Ring up ten Canvas Totes for a walk-in.",
+  "Ring up a hoodie in medium for Sarah Chen.",
+  "Reorder anything that's below its reorder point, from the best supplier. Date it today.",
+  "A purchase order for 50 Canvas Totes from Northwind is open and 40 arrived — receive them, dated today.",
+  "Sarah Chen is returning one Navy Large hoodie from order O-1006. It's in good condition.",
+  "Return the Canvas Tote from order O-1006 — it came back damaged.",
+  "Put all hoodies on 20% off from 2026-06-20 to 2026-06-22, then ring up one Gray Medium hoodie dated 2026-06-21 and tell me the price.",
+  "What were my top five products by profit margin last month?",
+  "What's about to stock out?",
+];
+
+function pickRecommendedPrompts(excluded: string[] = []): string[] {
+  const shuffled = recommendedPrompts.filter(
+    (prompt) => !excluded.includes(prompt),
+  );
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [
+      shuffled[randomIndex],
+      shuffled[index],
+    ];
+  }
+  return shuffled.slice(0, Math.random() < 0.5 ? 3 : 4);
+}
 
 const productImages: Record<string, string> = {
   "P-TEE-Blue": "/assets/ashgr-tee-blue.webp",
@@ -60,11 +97,17 @@ export default function App() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("default");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [tableSort, setTableSort] = useState<{
+    key: TableSortKey;
+    direction: SortDirection;
+  }>({ key: "product_name", direction: "ascending" });
   const [messages, setMessages] = useState<Message[]>([starterMessage]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState(pickRecommendedPrompts);
   const messageId = useRef(1);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -146,6 +189,22 @@ export default function App() {
     0,
   );
 
+  const listProducts = useMemo(() => {
+    const items = Object.values(groupedProducts).flat();
+    return items.sort((first, second) => {
+      const firstValue = first[tableSort.key] ?? "";
+      const secondValue = second[tableSort.key] ?? "";
+      const comparison =
+        typeof firstValue === "number" && typeof secondValue === "number"
+          ? firstValue - secondValue
+          : String(firstValue).localeCompare(String(secondValue), undefined, {
+              numeric: true,
+              sensitivity: "base",
+            });
+      return tableSort.direction === "ascending" ? comparison : -comparison;
+    });
+  }, [groupedProducts, tableSort]);
+
   async function sendMessage(event?: FormEvent) {
     event?.preventDefault();
     const message = input.trim();
@@ -156,6 +215,7 @@ export default function App() {
       { id: messageId.current++, role: "user", text: message },
     ]);
     setInput("");
+    setSuggestions((current) => pickRecommendedPrompts(current));
     setChatError(null);
     setIsSending(true);
 
@@ -190,6 +250,50 @@ export default function App() {
       event.preventDefault();
       void sendMessage();
     }
+  }
+
+  function selectSuggestion(prompt: string) {
+    setInput(prompt);
+    setChatError(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function changeTableSort(key: TableSortKey) {
+    setSortOrder("default");
+    setTableSort((current) => ({
+      key,
+      direction:
+        current.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }));
+  }
+
+  function changeSortOrder(value: SortOrder) {
+    setSortOrder(value);
+    if (value === "price-low") {
+      setTableSort({ key: "retail_price", direction: "ascending" });
+    } else if (value === "price-high") {
+      setTableSort({ key: "retail_price", direction: "descending" });
+    }
+  }
+
+  function tableHeader(key: TableSortKey, label: string) {
+    const isActive = tableSort.key === key;
+    return (
+      <th aria-sort={isActive ? tableSort.direction : "none"}>
+        <button type="button" onClick={() => changeTableSort(key)}>
+          {label}
+          <span aria-hidden="true">
+            {isActive
+              ? tableSort.direction === "ascending"
+                ? "↑"
+                : "↓"
+              : "↕"}
+          </span>
+        </button>
+      </th>
+    );
   }
 
   function clearFilters() {
@@ -290,7 +394,7 @@ export default function App() {
               <select
                 value={sortOrder}
                 onChange={(event) =>
-                  setSortOrder(event.target.value as SortOrder)
+                  changeSortOrder(event.target.value as SortOrder)
                 }
               >
                 <option value="default">Featured</option>
@@ -298,6 +402,33 @@ export default function App() {
                 <option value="price-high">Price: High to low</option>
               </select>
             </label>
+            <div className="view-control">
+              <span>View</span>
+              <div className="view-toggle" role="group" aria-label="Catalog view">
+                <button
+                  type="button"
+                  className={viewMode === "grid" ? "active" : ""}
+                  onClick={() => setViewMode("grid")}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === "grid"}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === "list" ? "active" : ""}
+                  onClick={() => setViewMode("list")}
+                  aria-label="List view"
+                  aria-pressed={viewMode === "list"}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 5h3v3H4V5Zm5 0h11v3H9V5ZM4 10.5h3v3H4v-3Zm5 0h11v3H9v-3ZM4 16h3v3H4v-3Zm5 0h11v3H9v-3Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -306,17 +437,18 @@ export default function App() {
             <div className="hero-copy">
               <span className="eyebrow">ashgr / drop 01</span>
               <h2>
-                Everyday essentials.
+                Less noise.
                 <br />
-                <em>Never ordinary.</em>
+                <em>More presence.</em>
               </h2>
               <p>
-                Limited apparel and bright everyday goods—made for repeat wear,
-                small rituals, and personal style.
+                Premium essentials shaped by minimalist design, exceptional
+                quality, and lasting comfort—for a generation that sets trends
+                instead of following them.
               </p>
               <div className="hero-badges">
-                <span>✦ Limited designs</span>
-                <span>✦ AI-powered help</span>
+                <span>✦ Premium quality, made to last</span>
+                <span>✦ Minimal design, maximum impact</span>
               </div>
             </div>
             <div className="hero-art" aria-hidden="true">
@@ -345,75 +477,145 @@ export default function App() {
           {!catalogError && products.length === 0 && (
             <div className="catalog-state">Loading inventory…</div>
           )}
-          {Object.entries(groupedProducts).map(([category, items]) => (
-            <section className="category-section" key={category}>
-              <div className="section-heading">
-                <div>
-                  <span>
-                    {String(
-                      Object.keys(groupedProducts).indexOf(category) + 1,
-                    ).padStart(2, "0")}
-                  </span>
-                  <h2>{titleCase(category)}</h2>
+          {viewMode === "grid" ? (
+            Object.entries(groupedProducts).map(([category, items]) => (
+              <section className="category-section" key={category}>
+                <div className="section-heading">
+                  <div>
+                    <span>
+                      {String(
+                        Object.keys(groupedProducts).indexOf(category) + 1,
+                      ).padStart(2, "0")}
+                    </span>
+                    <h2>{titleCase(category)}</h2>
+                  </div>
+                  <p>
+                    {items.length}{" "}
+                    {items.length === 1 ? "variant" : "variants"}
+                  </p>
                 </div>
-                <p>
-                  {items.length} {items.length === 1 ? "variant" : "variants"}
-                </p>
+                <div className="product-grid">
+                  {items.map((product) => (
+                    <article className="product-card" key={product.sku}>
+                      <div
+                        className={`product-art art-${product.product_id.toLowerCase().replace("p-", "")}`}
+                      >
+                        <img
+                          src={productImage(product)}
+                          alt={`${product.color ?? ""} ${product.product_name}`.trim()}
+                        />
+                        <small>
+                          {product.color ?? titleCase(product.category)}
+                        </small>
+                        <button
+                          type="button"
+                          className="quick-view"
+                          aria-label={`View ${product.product_name}`}
+                        >
+                          ↗
+                        </button>
+                      </div>
+                      <div className="product-info">
+                        <div>
+                          <p className="product-kicker">{product.sku}</p>
+                          <h3>{product.product_name}</h3>
+                        </div>
+                        <strong className="price">
+                          ${product.retail_price.toFixed(2)}
+                        </strong>
+                      </div>
+                      <div className="product-meta">
+                        <div className="variant-tags">
+                          {product.color && (
+                            <span>
+                              <i
+                                className={`swatch swatch-${product.color.toLowerCase()}`}
+                              />
+                              {product.color}
+                            </span>
+                          )}
+                          {product.size && <span>Size {product.size}</span>}
+                        </div>
+                        <span
+                          className={`stock ${product.quantity <= 5 ? "low" : ""}`}
+                        >
+                          <i />
+                          {product.quantity} in stock
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))
+          ) : visibleCount > 0 ? (
+            <section className="inventory-list" aria-label="Product inventory">
+              <div className="list-heading">
+                <div>
+                  <span>Inventory</span>
+                  <h2>All product variants</h2>
+                </div>
+                <p>{visibleCount} results</p>
               </div>
-              <div className="product-grid">
-                {items.map((product) => (
-                  <article className="product-card" key={product.sku}>
-                    <div
-                      className={`product-art art-${product.product_id.toLowerCase().replace("p-", "")}`}
-                    >
-                      <img
-                        src={productImage(product)}
-                        alt={`${product.color ?? ""} ${product.product_name}`.trim()}
-                      />
-                      <small>
-                        {product.color ?? titleCase(product.category)}
-                      </small>
-                      <button
-                        type="button"
-                        className="quick-view"
-                        aria-label={`View ${product.product_name}`}
-                      >
-                        ↗
-                      </button>
-                    </div>
-                    <div className="product-info">
-                      <div>
-                        <p className="product-kicker">{product.sku}</p>
-                        <h3>{product.product_name}</h3>
-                      </div>
-                      <strong className="price">
-                        ${product.retail_price.toFixed(2)}
-                      </strong>
-                    </div>
-                    <div className="product-meta">
-                      <div className="variant-tags">
-                        {product.color && (
-                          <span>
-                            <i
-                              className={`swatch swatch-${product.color.toLowerCase()}`}
+              <div className="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      {tableHeader("product_name", "Product")}
+                      {tableHeader("category", "Category")}
+                      {tableHeader("sku", "SKU")}
+                      {tableHeader("color", "Color")}
+                      {tableHeader("size", "Size")}
+                      {tableHeader("retail_price", "Price")}
+                      {tableHeader("quantity", "Stock")}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listProducts.map((product) => (
+                      <tr key={product.sku}>
+                        <td>
+                          <div className="table-product">
+                            <img
+                              src={productImage(product)}
+                              alt=""
+                              aria-hidden="true"
                             />
-                            {product.color}
+                            <strong>{product.product_name}</strong>
+                          </div>
+                        </td>
+                        <td>{titleCase(product.category)}</td>
+                        <td className="sku-cell">{product.sku}</td>
+                        <td>
+                          {product.color ? (
+                            <span className="table-color">
+                              <i
+                                className={`swatch swatch-${product.color.toLowerCase()}`}
+                              />
+                              {product.color}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>{product.size ?? "—"}</td>
+                        <td className="table-price">
+                          ${product.retail_price.toFixed(2)}
+                        </td>
+                        <td>
+                          <span
+                            className={`table-stock ${product.quantity <= 5 ? "low" : ""}`}
+                          >
+                            <i />
+                            {product.quantity}
                           </span>
-                        )}
-                        {product.size && <span>Size {product.size}</span>}
-                      </div>
-                      <span
-                        className={`stock ${product.quantity <= 5 ? "low" : ""}`}
-                      >
-                        <i />
-                        {product.quantity} in stock
-                      </span>
-                    </div>
-                  </article>
-                ))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
-          ))}
+          ) : null}
           {!catalogError && products.length > 0 && visibleCount === 0 && (
             <div className="empty-state">
               <h2>No products found</h2>
@@ -464,6 +666,27 @@ export default function App() {
               <div className="message-bubble">{message.text}</div>
             </article>
           ))}
+          <section
+            className="prompt-suggestions"
+            aria-label="Recommended prompts"
+          >
+            <div className="suggestions-heading">
+              <span>Try asking</span>
+              <small>Click to edit</small>
+            </div>
+            <div className="suggestion-list">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => selectSuggestion(suggestion)}
+                >
+                  <span>{suggestion}</span>
+                  <i aria-hidden="true">↗</i>
+                </button>
+              ))}
+            </div>
+          </section>
           {isSending && (
             <article className="message-row assistant">
               <div className="message-avatar">a</div>
