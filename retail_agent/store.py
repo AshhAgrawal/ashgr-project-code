@@ -40,6 +40,8 @@ def norm(value: str | None) -> str:
 
 
 class RetailStore:
+    backend = "csv-memory"
+
     def __init__(self, data_dir: str | Path = "data") -> None:
         self.data_dir = Path(data_dir)
         self.products_by_sku: dict[str, ProductVariant] = {}
@@ -196,6 +198,8 @@ class RetailStore:
         date: str = ASSIGNMENT_TODAY,
         order_discount_pct: int | float | str = 0,
     ) -> dict[str, Any]:
+        if not items:
+            raise StoreError("At least one sale item or SKU is required.")
         if payment_method not in {"cash", "card"}:
             raise StoreError("payment_method must be cash or card.")
         customer = self._find_customer(customer_name) if customer_name else None

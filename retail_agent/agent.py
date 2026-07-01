@@ -19,6 +19,7 @@ For multi-step requests that create a promotion and then ring up a sale, create 
 Never set order_discount_pct to represent a promotion or "X% off" sale; that is handled only by create_promotion. order_discount_pct is solely for an explicit whole-order discount the customer is given at checkout, and defaults to 0.
 The assignment's "today" is {ASSIGNMENT_TODAY}. "Last month" is May 2026.
 When a product variant is ambiguous, call the tool with the available details and report the tool's clarification/error.
+When the user supplies an exact SKU, pass that SKU as the sale item's product_name.
 Keep final answers concise and receipt-like when appropriate.
 """.strip()
 
@@ -164,18 +165,38 @@ class RetailAgent:
     def _rule_sale(self, text: str) -> dict[str, Any]:
         lowered = text.lower()
         items = []
-        if "classic tee" in lowered:
+        direct_skus = [
+            match.group(0).upper()
+            for match in re.finditer(
+                r"\b(?:TEE|HOOD)-[A-Z]{3}-[SML]\b|\b(?:TOTE|MUG|SOCK)\b",
+                text,
+                re.IGNORECASE,
+            )
+        ]
+        for sku in direct_skus:
+            items.append(
+                {
+                    "product_name": sku,
+                    "quantity": _quantity_before(lowered, sku.lower()),
+                }
+            )
+
+        if "classic tee" in lowered and not any(
+            sku.startswith("TEE-") for sku in direct_skus
+        ):
             qty = _quantity_before(lowered, "classic")
             items.append({"product_name": "Classic Tee", "color": _color(lowered), "size": _size(lowered), "quantity": qty})
-        if "canvas tote" in lowered or "totes" in lowered:
+        if ("canvas tote" in lowered or "totes" in lowered) and "TOTE" not in direct_skus:
             qty = _quantity_before(lowered, "canvas")
             items.append({"product_name": "Canvas Tote", "quantity": qty})
-        if "hoodie" in lowered:
+        if "hoodie" in lowered and not any(
+            sku.startswith("HOOD-") for sku in direct_skus
+        ):
             qty = _quantity_before(lowered, "hoodie")
             items.append({"product_name": "Pullover Hoodie", "color": _color(lowered), "size": _size(lowered), "quantity": qty})
-        if "mug" in lowered:
+        if "mug" in lowered and "MUG" not in direct_skus:
             items.append({"product_name": "Ceramic Mug", "quantity": _quantity_before(lowered, "mug")})
-        if "sock" in lowered:
+        if "sock" in lowered and "SOCK" not in direct_skus:
             items.append({"product_name": "Wool Socks", "quantity": _quantity_before(lowered, "sock")})
         dates = _dates(text)
         date = dates[-1] if dates else ASSIGNMENT_TODAY

@@ -8,12 +8,15 @@ I split the project into two parts:
 
 1. A deterministic retail engine in `retail_agent/store.py`.
 2. A thin agent layer in `retail_agent/agent.py`.
+3. A MongoDB persistence adapter in `retail_agent/mongo_store.py`.
+4. Cookie-based authentication in `retail_agent/auth.py`.
 
 The agent does not calculate prices or margins itself. It chooses a tool, passes structured arguments, and the Python engine applies the business rules. The LLM is used only to translate natural language into a tool call; every number in the answer comes from the engine. This makes the answers repeatable and easy to test.
 
 ## Data Model
 
-The CSVs are loaded into in-memory dataclasses:
+The CSVs are seed exports imported into MongoDB. MongoDB records are loaded into
+the engine's dataclass indexes for deterministic calculations:
 
 - Products are modeled as sellable variants keyed by SKU.
 - Inventory is keyed by SKU.
@@ -183,6 +186,8 @@ Refund: $18.00
 main.py                 CLI entrypoint
 retail_agent/models.py  Dataclasses
 retail_agent/store.py   Business logic and state
+retail_agent/mongo_store.py MongoDB persistence adapter
+retail_agent/store_factory.py Backend configuration
 retail_agent/tools.py   Tool schemas and dispatcher
 retail_agent/agent.py   Groq agent and fallback parser
 requirements.txt        Python dependencies
@@ -190,8 +195,27 @@ requirements.txt        Python dependencies
 
 ## Tradeoffs
 
-The project keeps state in memory instead of writing back to CSV. That is enough for an interactive assignment session and avoids adding database complexity.
+MongoDB is the persistent source of truth when `MONGODB_URI` and
+`MONGODB_DATABASE` are configured. Sales, returns, and receiving operations use
+transactions; inventory decrements and return reservations also use conditional
+updates to prevent overselling or over-returning across concurrent API instances.
+The CSV-backed store remains available only as an offline fallback.
 
-The purchase-order workflow is minimal. It records received quantities and updates inventory, but it does not persist open purchase orders across runs. For products with variants, receiving stock requires an exact SKU or variant details instead of guessing a default SKU.
+User accounts are stored separately from retail customers. Passwords use a
+unique salt and scrypt hash. Login sessions use random browser cookies while
+MongoDB stores only token hashes with TTL expiry. Protected API routes resolve
+the user from that session before accessing inventory or agent tools.
+The `features` collection controls whether authentication is enforced, allowing
+the login/signup scope to be disabled without a redeploy.
+Self-service signup assigns the `staff` role. Admin-only API dependencies check
+the current role from MongoDB before exposing internal order, customer, return,
+purchase-order, or supplier data.
+One-click guests also receive the `staff` role. They are linked to a random
+HTTP-only browser identifier whose hash is stored with first-seen, last-seen,
+and visit-count metadata; IP addresses are deliberately not used as identity.
 
-Future improvements outside this assignment scope would include customer creation for new named customers, fixed-dollar promotions, and persisted purchase-order records.
+For products with variants, receiving stock requires an exact SKU or variant
+details instead of guessing a default SKU.
+
+Future improvements outside this assignment scope include customer creation for
+new named customers and fixed-dollar promotions.

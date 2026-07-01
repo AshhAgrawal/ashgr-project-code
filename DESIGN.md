@@ -31,8 +31,8 @@ flowchart TD
     Agent -->|"run(name, args)"| Runner["ToolRunner (tools.py)"]
     Runner -->|"dispatch"| Store["RetailStore engine (store.py)"]
 
-    Store -->|"in-memory dicts"| State[("Domain state\norders, inventory,\nreturns, promos, POs")]
-    CSV[("data/*.csv\nseed snapshot")] -->|"load() at startup"| Store
+    Store -->|"Mongo adapter"| Mongo[("MongoDB Atlas\norders, inventory,\nreturns, promos, POs")]
+    CSV[("data/*.csv\nseed snapshot")] -->|"one-time importer"| Mongo
 
     Store -->|"result dict"| Runner --> Agent
     Agent -->|"deterministic receipt /\nmodel summary"| Main --> User
@@ -49,6 +49,7 @@ flowchart TD
 | Agent | `retail_agent/agent.py` | NL → tool call (via Groq or rules), conversation memory, guardrails, output formatting | tools + LLM |
 | Tools | `retail_agent/tools.py` | Tool JSON schemas + name→method dispatch + arg defaults | the store |
 | Engine | `retail_agent/store.py` | All business rules, calculations, and mutable state | data + models |
+| Persistence | `retail_agent/mongo_store.py` | MongoDB mapping, transactions, conditional updates | engine + MongoDB |
 | Model | `retail_agent/models.py` | Plain dataclasses for every entity | nothing |
 
 The dependency arrows only point downward. The engine has no idea an LLM exists, which is why it
@@ -58,7 +59,7 @@ can be exercised directly in a plain Python script without any API access.
 
 ## 3. Domain model
 
-CSV rows are loaded once at startup into dataclasses and indexed several ways for O(1) lookup.
+MongoDB records are refreshed into dataclasses and indexed several ways for O(1) lookup during deterministic calculations.
 
 ```mermaid
 classDiagram
@@ -314,15 +315,15 @@ flag if on_hand <= reorder_point OR days_cover < 14
 
 ## 8. State and memory model
 
-There are two independent kinds of memory, both scoped to a single CLI session:
+There are two independent kinds of state:
 
 ```mermaid
 flowchart LR
     subgraph Conversation memory
         M["self.messages[]\n(system + user + tool turns)"]
     end
-    subgraph Domain state
-        D["RetailStore dicts\norders, inventory, returns,\npromotions, purchase_orders\n+ last_order_id / last_return_id"]
+    subgraph Persistent domain state
+        D["MongoDB Atlas\norders, inventory, returns,\npromotions, purchase_orders"]
     end
     M -->|"lets the model resolve\n'now refund that'"| Resolve
     D -->|"applies the mutation to the\nright order and inventory"| Apply
@@ -333,9 +334,9 @@ flowchart LR
 - **Domain state** plus `last_order_id` / `last_return_id` / `last_purchase_order_id` lets a
   follow-up with no explicit id act on the most recent entity.
 
-State is intentionally in-memory and reloaded from CSV every run. The CSVs are a fixed
-"as-of 2026-06-19" snapshot, so a fresh load guarantees a deterministic baseline; persisting
-mutations back would double-apply against a frozen "today."
+The MongoDB adapter refreshes the engine's calculation indexes before each
+operation. Mutations are persisted in Atlas, and multi-document operations use
+transactions. CSV files remain an idempotent seed source rather than runtime state.
 
 ---
 
@@ -371,8 +372,8 @@ flowchart TD
 
 The layering makes each of these a localized change rather than a rewrite:
 
-- **Persistence** — write the in-memory state back to CSV or a small DB at the engine boundary;
-  no agent or tool change needed.
+- **Alternative persistence** — implement the `RetailStore` contract behind the
+  factory; no agent or tool change is needed.
 - **New actions** — add a `RetailStore` method, register it in `ToolRunner.handlers`, and add one
   schema entry in `TOOL_SCHEMAS`.
 - **Manual purchase orders / customer creation / fixed-dollar promotions** — engine-level additions

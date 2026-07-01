@@ -9,6 +9,8 @@ import {
 } from "react";
 
 import LandingPage from "./LandingPage";
+import AuthPage, { AuthUser } from "./AuthPage";
+import AdminDataView, { AdminResource } from "./AdminDataView";
 
 type Product = {
   sku: string;
@@ -38,6 +40,7 @@ type TableSortKey =
   | "retail_price"
   | "quantity";
 type SortDirection = "ascending" | "descending";
+type WorkspaceTab = "catalog" | AdminResource;
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -58,6 +61,15 @@ const recommendedPrompts = [
   "Put all hoodies on 20% off from 2026-06-20 to 2026-06-22, then ring up one Gray Medium hoodie dated 2026-06-21 and tell me the price.",
   "What were my top five products by profit margin last month?",
   "What's about to stock out?",
+];
+
+const adminTabs: Array<{ id: WorkspaceTab; label: string }> = [
+  { id: "catalog", label: "Storefront" },
+  { id: "orders", label: "Orders" },
+  { id: "customers", label: "Customers" },
+  { id: "returns", label: "Returns" },
+  { id: "purchase-orders", label: "Purchase orders" },
+  { id: "suppliers", label: "Suppliers" },
 ];
 
 function pickRecommendedPrompts(excluded: string[] = []): string[] {
@@ -90,7 +102,17 @@ const productImage = (product: Product) =>
   productImages[`${product.product_id}-${product.color ?? ""}`] ??
   productImages[product.product_id];
 
-function Workspace() {
+type WorkspaceProps = {
+  user: AuthUser;
+  authenticationEnabled: boolean;
+  onLogout: () => Promise<void>;
+};
+
+function Workspace({
+  user,
+  authenticationEnabled,
+  onLogout,
+}: WorkspaceProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -104,6 +126,8 @@ function Workspace() {
     key: TableSortKey;
     direction: SortDirection;
   }>({ key: "product_name", direction: "ascending" });
+  const [activeWorkspaceTab, setActiveWorkspaceTab] =
+    useState<WorkspaceTab>("catalog");
   const [messages, setMessages] = useState<Message[]>([starterMessage]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -116,7 +140,9 @@ function Workspace() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/products`);
+      const response = await fetch(`${API_URL}/api/products`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Could not load inventory.");
       setProducts((await response.json()) as Product[]);
       setCatalogError(null);
@@ -224,6 +250,7 @@ function Workspace() {
     try {
       const response = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
@@ -327,10 +354,47 @@ function Workspace() {
             <div className="inventory-count">
               <strong>{visibleCount}</strong> variants in view
             </div>
+            {authenticationEnabled && (
+              <div className="user-session">
+                <span aria-hidden="true">
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+                <div>
+                  <strong>{user.name}</strong>
+                  <small>
+                    {user.account_type === "guest"
+                      ? "Guest session"
+                      : user.email}{" "}
+                    · {user.role}
+                  </small>
+                </div>
+                <button type="button" onClick={() => void onLogout()}>
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
-        <section className="filter-bar" aria-label="Product filters">
+        {user.role === "admin" && authenticationEnabled && (
+          <nav className="workspace-tabs" aria-label="Admin workspace data">
+            {adminTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={activeWorkspaceTab === tab.id ? "active" : ""}
+                onClick={() => setActiveWorkspaceTab(tab.id)}
+                aria-current={activeWorkspaceTab === tab.id ? "page" : undefined}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {activeWorkspaceTab === "catalog" ? (
+          <>
+            <section className="filter-bar" aria-label="Product filters">
           <label className="search-field">
             <span className="sr-only">Search products</span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -432,9 +496,9 @@ function Workspace() {
               </div>
             </div>
           </div>
-        </section>
+            </section>
 
-        <div className="catalog-scroll">
+            <div className="catalog-scroll">
           <section className="hero-banner">
             <div className="hero-copy">
               <span className="eyebrow">ashgr / drop 01</span>
@@ -625,7 +689,11 @@ function Workspace() {
               <button onClick={clearFilters}>Clear all filters</button>
             </div>
           )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <AdminDataView resource={activeWorkspaceTab} apiUrl={API_URL} />
+        )}
       </section>
 
       {isChatOpen && (
@@ -748,27 +816,146 @@ function Workspace() {
   );
 }
 
-const workspaceHash = "#/workspace";
+type AppRoute = "home" | "login" | "signup" | "workspace";
+
+function routeFromHash(): AppRoute {
+  if (window.location.hash === "#/login") return "login";
+  if (window.location.hash === "#/signup") return "signup";
+  if (window.location.hash === "#/workspace") return "workspace";
+  return "home";
+}
 
 export default function App() {
-  const [showWorkspace, setShowWorkspace] = useState(
-    () => window.location.hash === workspaceHash,
-  );
+  const [route, setRoute] = useState<AppRoute>(routeFromHash);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authenticationEnabled, setAuthenticationEnabled] = useState(true);
 
   useEffect(() => {
-    const handleRouteChange = () =>
-      setShowWorkspace(window.location.hash === workspaceHash);
+    const handleRouteChange = () => setRoute(routeFromHash());
     window.addEventListener("hashchange", handleRouteChange);
     return () => window.removeEventListener("hashchange", handleRouteChange);
   }, []);
 
-  function enterWorkspace() {
-    window.location.hash = "/workspace";
+  useEffect(() => {
+    async function restoreSession() {
+      try {
+        const featureResponse = await fetch(`${API_URL}/api/features`);
+        if (!featureResponse.ok) throw new Error("Could not load features.");
+        const featureBody = (await featureResponse.json()) as {
+          authentication: boolean;
+        };
+        setAuthenticationEnabled(featureBody.authentication);
+        if (!featureBody.authentication) {
+          setUser(null);
+          return;
+        }
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          credentials: "include",
+        });
+        if (!response.ok) return;
+        const body = (await response.json()) as { user: AuthUser };
+        setUser(body.user);
+      } catch {
+        setUser(null);
+      } finally {
+        setAuthReady(true);
+      }
+    }
+    void restoreSession();
+  }, []);
+
+  function navigate(nextRoute: AppRoute) {
+    window.location.hash = nextRoute === "home" ? "" : `/${nextRoute}`;
+    setRoute(nextRoute);
   }
 
-  return showWorkspace ? (
-    <Workspace />
-  ) : (
-    <LandingPage onEnterWorkspace={enterWorkspace} />
+  function authenticated(nextUser: AuthUser) {
+    setUser(nextUser);
+    navigate("workspace");
+  }
+
+  async function logout() {
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      setUser(null);
+      navigate("home");
+    }
+  }
+
+  if (!authReady) {
+    return (
+      <main className="auth-loading" aria-label="Loading ashgr">
+        <img src="/assets/ashgr-wordmark.webp" alt="ashgr" />
+        <span />
+      </main>
+    );
+  }
+
+  if (route === "workspace") {
+    return user || !authenticationEnabled ? (
+      <Workspace
+        user={
+          user ?? {
+            id: "anonymous",
+            name: "Workspace Guest",
+            email: "guest@local",
+            role: "staff",
+            account_type: "guest",
+          }
+        }
+        authenticationEnabled={authenticationEnabled}
+        onLogout={logout}
+      />
+    ) : (
+      <AuthPage
+        mode="login"
+        apiUrl={API_URL}
+        onAuthenticated={authenticated}
+        onNavigate={(next) => navigate(next)}
+      />
+    );
+  }
+
+  if (route === "login" || route === "signup") {
+    if (!authenticationEnabled) {
+      return (
+        <Workspace
+          user={{
+            id: "anonymous",
+            name: "Workspace Guest",
+            email: "guest@local",
+            role: "staff",
+            account_type: "guest",
+          }}
+          authenticationEnabled={false}
+          onLogout={logout}
+        />
+      );
+    }
+    return (
+      <AuthPage
+        mode={route}
+        apiUrl={API_URL}
+        onAuthenticated={authenticated}
+        onNavigate={(next) => navigate(next)}
+      />
+    );
+  }
+
+  return (
+    <LandingPage
+      authenticationEnabled={authenticationEnabled}
+      onSignIn={() =>
+        navigate(user || !authenticationEnabled ? "workspace" : "login")
+      }
+      onSignUp={() =>
+        navigate(user || !authenticationEnabled ? "workspace" : "signup")
+      }
+    />
   );
 }

@@ -1,5 +1,7 @@
 type LandingPageProps = {
-  onEnterWorkspace: () => void;
+  authenticationEnabled: boolean;
+  onSignIn: () => void;
+  onSignUp: () => void;
 };
 
 const capabilities = [
@@ -24,7 +26,9 @@ const capabilities = [
 ];
 
 export default function LandingPage({
-  onEnterWorkspace,
+  authenticationEnabled,
+  onSignIn,
+  onSignUp,
 }: LandingPageProps) {
   return (
     <main className="landing-page">
@@ -33,8 +37,9 @@ export default function LandingPage({
           <img src="/assets/ashgr-wordmark.webp" alt="ashgr" />
           <span>Retail workspace</span>
         </a>
-        <button className="nav-login" type="button" onClick={onEnterWorkspace}>
-          Sign in <span aria-hidden="true">↗</span>
+        <button className="nav-login" type="button" onClick={onSignIn}>
+          {authenticationEnabled ? "Sign in" : "Open workspace"}{" "}
+          <span aria-hidden="true">↗</span>
         </button>
       </nav>
 
@@ -52,8 +57,11 @@ export default function LandingPage({
             updates, reorders, and reports—without switching systems.
           </p>
           <div className="landing-actions">
-            <button type="button" onClick={onEnterWorkspace}>
-              Open retail workspace <span aria-hidden="true">→</span>
+            <button type="button" onClick={onSignUp}>
+              {authenticationEnabled
+                ? "Create your workspace"
+                : "Open retail workspace"}{" "}
+              <span aria-hidden="true">→</span>
             </button>
             <a href="#how-it-works">See how it works</a>
           </div>
@@ -171,8 +179,11 @@ export default function LandingPage({
       <section className="landing-cta">
         <span>Ready for the next shift?</span>
         <h2>Put your retail story to work.</h2>
-        <button type="button" onClick={onEnterWorkspace}>
-          Sign in to the workspace <span aria-hidden="true">→</span>
+        <button type="button" onClick={onSignUp}>
+          {authenticationEnabled
+            ? "Sign in to the workspace"
+            : "Open the workspace"}{" "}
+          <span aria-hidden="true">→</span>
         </button>
       </section>
 

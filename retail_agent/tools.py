@@ -21,7 +21,13 @@ TOOL_SCHEMAS = [
                         "items": {
                             "type": "object",
                             "properties": {
-                                "product_name": {"type": "string"},
+                                "product_name": {
+                                    "type": "string",
+                                    "description": (
+                                        "Product name or exact SKU, such as Classic Tee "
+                                        "or TEE-BLU-M."
+                                    ),
+                                },
                                 "color": {"type": ["string", "null"]},
                                 "size": {"type": ["string", "null"]},
                                 "quantity": {"type": "integer"},
